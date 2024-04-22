@@ -8,7 +8,7 @@ It then spins up a local web server located at port 8000 where you can interact 
 # Running
 ### Install dependencies
 ```bash
-    pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ### Run
