@@ -1,0 +1,98 @@
+{% extends 'layout.html' %}
+{% set active_page = 'Repositories' %}
+
+{% block content %}
+    <ul class="nav nav-tabs" id="myTab" role="tablist">
+        <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info-tab-pane" type="button" role="tab" aria-controls="info-tab-pane" aria-selected="true">Information</button>
+        </li>
+        <li class="nav-item" role="presentation">
+        <button class="nav-link" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats-tab-pane" type="button" role="tab" aria-controls="stats-tab-pane" aria-selected="false">Statistics/Analysis</button>
+        </li>
+    </ul>
+    <div class="tab-content" id="myTabContent">
+        <div class="tab-pane fade show active" id="info-tab-pane" role="tabpanel" aria-labelledby="info-tab" tabindex="0">
+        <div class="bg-body-tertiary p-5 rounded">
+            <div class="row">
+                <div class="col">
+                    <h1>Repositories</h1>
+                    <table id="repositoriesTable" class="table">
+                        <thead>
+                            <tr>
+                              <th>ID</th>
+                              <th>Name</th>
+                              <th>Owner</th>
+                              <th>URL</th>
+                              <th>Description</th>                      
+                              <th>Primary Language</th>                      
+                              <th>Creation Date</th>
+                              <th>Update Date</th>
+                              <th>Push Date</th>
+                              <th>Is Archived</th>
+                              <th>Archival Date</th>
+                              <th>Is a Fork</th>                      
+                              <th>Is Empty</th>                      
+                              <th>Is Locked</th>
+                              <th>Is Disabled</th>
+                              <th>Is Template</th>
+                              <th>Total Issue Users</th>
+                              <th>Total Mentionable Users</th>
+                              <th>Total Committer Count</th>                      
+                              <th>Total Repo Size</th>                      
+                              <th>Total Commits</th>
+                              <th>Issues</th>
+                              <th>Forks</th>
+                              <th>Stars</th>
+                              <th>Watchers</th>
+                              <th>Branch Name</th>                      
+                              <th>Domain</th>                      
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+            </div>
+        </div>
+        </div>
+        <div class="tab-pane fade" id="stats-tab-pane" role="tabpanel" aria-labelledby="stats-tab" tabindex="0">
+        <div class="bg-body-tertiary p-5 rounded">
+            <div class="row">
+                <div class="col">
+                    <h1>Repositories pushed per year</h1>
+                    <canvas id="chart1" height="300"></canvas>
+                </div>
+                <div class="col">
+                    <h1>Repositories created per year</h1>
+                    <canvas id="chart2" height="300"></canvas>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <h1>Repositories updated per year</h1>
+                    <canvas id="chart3" height="300"></canvas>
+                </div>
+                <div class="col">
+                    <h1>Repositories domains</h1>
+                    <canvas id="chart4" height="300"></canvas>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <h1>Repository commits</h1>
+                    <canvas id="chart5" height="400"></canvas>
+                </div>
+                <div class="col">
+                    <h1>Repository committers</h1>
+                    <canvas id="chart6" height="400"></canvas>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <h1>Repositories total size</h1>
+                    <canvas id="chart7" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+{% endblock %}
+{% block additionaljs %}<script src="{{ url_for('static', filename= 'js/repositories.js') }}"></script>{% endblock%}
