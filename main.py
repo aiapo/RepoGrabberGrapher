@@ -10,6 +10,10 @@ import sqlalchemy
 import hashlib
 import re
 from dataclasses import dataclass
+import validators
+import requests
+from tqdm import tqdm
+import os
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///rgg.db'
@@ -115,6 +119,20 @@ def parseBool(inp):
 
 def db_init():
     db.create_all()
+
+def download(url, fname, chunk_size=1024):
+    resp = requests.get(url, stream=True)
+    total = int(resp.headers.get('content-length', 0))
+    with open(fname, 'wb') as file, tqdm(
+        desc=fname,
+        total=total,
+        unit='iB',
+        unit_scale=True,
+        unit_divisor=1024,
+    ) as bar:
+        for data in resp.iter_content(chunk_size=chunk_size):
+            size = file.write(data)
+            bar.update(size)
 
 def readRGDS(fileName,compressed):
     validAction = {
@@ -288,6 +306,116 @@ def binnedDataCSV(column,binSize):
 
         return r
     
+@app.route('/api/repos/list')
+def reposList():
+    hash=hashlib.md5(("reposList").encode()).hexdigest()
+    result = db.session.query(Queries.result).filter_by(hash=hash).one_or_none()
+    if(result != None):
+        return result[0]
+    else:
+        repos = []
+        for row in Repositories.query.all():
+            repos.append(Repositories.as_dict(row))
+        json = pd.DataFrame(repos, columns=['id','name','owner','url','description','primarylanguage','creationdate','updatedate','pushdate','isarchived','archivedat','isforked','isempty','islocked','isdisabled','istemplate','totalissueusers','totalmentionableusers','totalcommittercount','totalprojectsize','totalcommits','issuecount','forkcount','starcount','watchcount','branchname','domain']).to_json(orient='records')
+    
+        r = "{\"data\":"+json+"}"
+        db.session.add(Queries(hash=hash,result=r))
+        db.session.commit()
+        return r
+
+@app.route('/api/repos/countBy/<string:countBy>')
+def reposBy(countBy):
+    hash=hashlib.md5(("reposBy"+countBy).encode()).hexdigest()
+    result = db.session.query(Queries.result).filter_by(hash=hash).one_or_none()
+    if(result != None):
+        return result[0]
+    else:
+        if countBy=="creation":
+            results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Repositories.creationDate), sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Repositories.creationDate))).group_by(sqlalchemy.func.strftime('%Y', Repositories.creationDate)).all()]
+            r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
+        elif countBy=="push":
+            results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Repositories.pushDate), sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Repositories.pushDate))).group_by(sqlalchemy.func.strftime('%Y', Repositories.pushDate)).all()]
+            r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
+        elif countBy=="update":
+            results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Repositories.updateDate), sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Repositories.updateDate))).group_by(sqlalchemy.func.strftime('%Y', Repositories.updateDate)).all()]
+            r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
+        elif countBy=="domain":
+            results = [tuple(row) for row in db.session.query(Repositories.domain, sqlalchemy.func.count(Repositories.domain)).group_by(Repositories.domain).all()]
+            r = pd.DataFrame(results, columns=['domain', 'count']).to_json(orient='records')
+        else:
+            return '{"status":"error","message":"Invalid countBy.. Try again."}'
+    
+        db.session.add(Queries(hash=hash,result=r))
+        db.session.commit()
+        return r
+
+@app.route('/api/repos/countBy/<string:countBy>/binCount/<int:binCount>')
+def reposBinned(countBy,binCount):
+    if countBy=="commit":
+        return binnedDataCSV('totalCommits',binCount)  
+    
+    if countBy=="committer":
+        return binnedDataCSV('totalCommitterCount',binCount)  
+    
+    if countBy=="size":
+        return binnedDataCSV('totalProjectSize',binCount)  
+        
+    if countBy=="issue":
+        return binnedDataCSV('issueCount',binCount)  
+        
+    if countBy=="watch":
+        return binnedDataCSV('watchCount',binCount)  
+        
+    if countBy=="star":
+        return binnedDataCSV('starCount',binCount)  
+        
+    return '{"status":"error","message":"Invalid countBy or binCount.. Try again."}'
+
+@app.route('/api/refactorings/groupBy/<string:groupBy>/countBy/<string:countBy>')
+def refactoringsBy(groupBy,countBy):
+    hash=hashlib.md5(("refactoringsBy"+groupBy+countBy).encode()).hexdigest()
+    result = db.session.query(Queries.result).filter_by(hash=hash).one_or_none()
+    if(result != None):
+        return result[0]
+    else:
+        if groupBy=="all":
+            if countBy=="year":
+                results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Refactorings.commitDate), sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Refactorings.commitDate))).group_by(sqlalchemy.func.strftime('%Y', Refactorings.commitDate)).all()]
+                r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
+            elif countBy=="type":
+                results = [tuple(row) for row in db.session.query(Refactorings.refactoringName, sqlalchemy.func.count(Refactorings.refactoringName)).group_by(Refactorings.refactoringName).all()]
+                r = pd.DataFrame(results, columns=['type', 'count']).to_json(orient='records')
+
+        elif groupBy=="desktop":
+            if countBy=="year":
+                results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Refactorings.commitDate),sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Refactorings.commitDate))).filter(Repositories.domain=='desktop').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(sqlalchemy.func.strftime('%Y', Refactorings.commitDate)).all()]
+                r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
+            elif countBy=="type":
+                results = [tuple(row) for row in db.session.query(Refactorings.refactoringName, sqlalchemy.func.count(Refactorings.refactoringName)).filter(Repositories.domain=='desktop').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(Refactorings.refactoringName).all()]
+                r = pd.DataFrame(results, columns=['type', 'count']).to_json(orient='records')
+            
+        elif groupBy=="mobile":
+            if countBy=="year":
+                results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Refactorings.commitDate),sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Refactorings.commitDate))).filter(Repositories.domain=='mobile').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(sqlalchemy.func.strftime('%Y', Refactorings.commitDate)).all()]
+                r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
+            elif countBy=="type":
+                results = [tuple(row) for row in db.session.query(Refactorings.refactoringName, sqlalchemy.func.count(Refactorings.refactoringName)).filter(Repositories.domain=='mobile').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(Refactorings.refactoringName).all()]
+                r = pd.DataFrame(results, columns=['type', 'count']).to_json(orient='records')
+            
+        elif groupBy=="web":
+            if countBy=="year":
+                results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Refactorings.commitDate),sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Refactorings.commitDate))).filter(Repositories.domain=='web').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(sqlalchemy.func.strftime('%Y', Refactorings.commitDate)).all()]
+                r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
+            elif countBy=="type":
+                results = [tuple(row) for row in db.session.query(Refactorings.refactoringName, sqlalchemy.func.count(Refactorings.refactoringName)).filter(Repositories.domain=='web').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(Refactorings.refactoringName).all()]
+                r = pd.DataFrame(results, columns=['type', 'count']).to_json(orient='records')
+        else:    
+            return '{"status":"error","message":"Invalid groupBy or countBy.. Try again."}'
+    
+        db.session.add(Queries(hash=hash,result=r))
+        db.session.commit()
+        return r
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -307,121 +435,21 @@ if __name__ == '__main__':
         opts = parseArgs(sys.argv[1:])
 
         if opts.rgds:
-            with app.app_context():
-                if(readRGDS(opts.rgds,True)):
+            def importDs(ds):
+                if(readRGDS(ds,True)):
                     print("Dataset successfully imported into database from RGDS file!")
                 else:
                     print("Dataset ignored because RGDS file has already been imported. Using database...") 
 
-        @app.route('/api/repos/list')
-        def reposList():
-            hash=hashlib.md5(("reposList").encode()).hexdigest()
-            result = db.session.query(Queries.result).filter_by(hash=hash).one_or_none()
-            if(result != None):
-                return result[0]
+            if(validators.url(opts.rgds)):
+                print("Remote file detected, downloading...")
+                download(opts.rgds,'ds.rgds')
+                importDs('ds.rgds')
+                print("Deleting temporary download...")
+                if os.path.exists('ds.rgds'):
+                    os.remove('ds.rgds')
             else:
-                repos = []
-                for row in Repositories.query.all():
-                    repos.append(Repositories.as_dict(row))
-                json = pd.DataFrame(repos, columns=['id','name','owner','url','description','primarylanguage','creationdate','updatedate','pushdate','isarchived','archivedat','isforked','isempty','islocked','isdisabled','istemplate','totalissueusers','totalmentionableusers','totalcommittercount','totalprojectsize','totalcommits','issuecount','forkcount','starcount','watchcount','branchname','domain']).to_json(orient='records')
-            
-                r = "{\"data\":"+json+"}"
-                db.session.add(Queries(hash=hash,result=r))
-                db.session.commit()
-                return r
-
-        @app.route('/api/repos/countBy/<string:countBy>')
-        def reposBy(countBy):
-            hash=hashlib.md5(("reposBy"+countBy).encode()).hexdigest()
-            result = db.session.query(Queries.result).filter_by(hash=hash).one_or_none()
-            if(result != None):
-                return result[0]
-            else:
-                if countBy=="creation":
-                    results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Repositories.creationDate), sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Repositories.creationDate))).group_by(sqlalchemy.func.strftime('%Y', Repositories.creationDate)).all()]
-                    r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
-                elif countBy=="push":
-                    results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Repositories.pushDate), sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Repositories.pushDate))).group_by(sqlalchemy.func.strftime('%Y', Repositories.pushDate)).all()]
-                    r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
-                elif countBy=="update":
-                    results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Repositories.updateDate), sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Repositories.updateDate))).group_by(sqlalchemy.func.strftime('%Y', Repositories.updateDate)).all()]
-                    r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
-                elif countBy=="domain":
-                    results = [tuple(row) for row in db.session.query(Repositories.domain, sqlalchemy.func.count(Repositories.domain)).group_by(Repositories.domain).all()]
-                    r = pd.DataFrame(results, columns=['domain', 'count']).to_json(orient='records')
-                else:
-                    return '{"status":"error","message":"Invalid countBy.. Try again."}'
-            
-                db.session.add(Queries(hash=hash,result=r))
-                db.session.commit()
-                return r
-
-        @app.route('/api/repos/countBy/<string:countBy>/binCount/<int:binCount>')
-        def reposBinned(countBy,binCount):
-            if countBy=="commit":
-                return binnedDataCSV('totalCommits',binCount)  
-            
-            if countBy=="committer":
-                return binnedDataCSV('totalCommitterCount',binCount)  
-            
-            if countBy=="size":
-                return binnedDataCSV('totalProjectSize',binCount)  
+                importDs(opts.rgds)    
                 
-            if countBy=="issue":
-                return binnedDataCSV('issueCount',binCount)  
-                
-            if countBy=="watch":
-                return binnedDataCSV('watchCount',binCount)  
-                
-            if countBy=="star":
-                return binnedDataCSV('starCount',binCount)  
-                
-            return '{"status":"error","message":"Invalid countBy or binCount.. Try again."}'
-        
-        @app.route('/api/refactorings/groupBy/<string:groupBy>/countBy/<string:countBy>')
-        def refactoringsBy(groupBy,countBy):
-            hash=hashlib.md5(("refactoringsBy"+groupBy+countBy).encode()).hexdigest()
-            result = db.session.query(Queries.result).filter_by(hash=hash).one_or_none()
-            if(result != None):
-                return result[0]
-            else:
-                if groupBy=="all":
-                    if countBy=="year":
-                        results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Refactorings.commitDate), sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Refactorings.commitDate))).group_by(sqlalchemy.func.strftime('%Y', Refactorings.commitDate)).all()]
-                        r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
-                    elif countBy=="type":
-                        results = [tuple(row) for row in db.session.query(Refactorings.refactoringName, sqlalchemy.func.count(Refactorings.refactoringName)).group_by(Refactorings.refactoringName).all()]
-                        r = pd.DataFrame(results, columns=['type', 'count']).to_json(orient='records')
-
-                elif groupBy=="desktop":
-                    if countBy=="year":
-                        results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Refactorings.commitDate),sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Refactorings.commitDate))).filter(Repositories.domain=='desktop').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(sqlalchemy.func.strftime('%Y', Refactorings.commitDate)).all()]
-                        r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
-                    elif countBy=="type":
-                        results = [tuple(row) for row in db.session.query(Refactorings.refactoringName, sqlalchemy.func.count(Refactorings.refactoringName)).filter(Repositories.domain=='desktop').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(Refactorings.refactoringName).all()]
-                        r = pd.DataFrame(results, columns=['type', 'count']).to_json(orient='records')
-                    
-                elif groupBy=="mobile":
-                    if countBy=="year":
-                        results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Refactorings.commitDate),sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Refactorings.commitDate))).filter(Repositories.domain=='mobile').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(sqlalchemy.func.strftime('%Y', Refactorings.commitDate)).all()]
-                        r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
-                    elif countBy=="type":
-                        results = [tuple(row) for row in db.session.query(Refactorings.refactoringName, sqlalchemy.func.count(Refactorings.refactoringName)).filter(Repositories.domain=='mobile').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(Refactorings.refactoringName).all()]
-                        r = pd.DataFrame(results, columns=['type', 'count']).to_json(orient='records')
-                    
-                elif groupBy=="web":
-                    if countBy=="year":
-                        results = [tuple(row) for row in db.session.query(sqlalchemy.func.strftime('%Y', Refactorings.commitDate),sqlalchemy.func.count(sqlalchemy.func.strftime('%Y', Refactorings.commitDate))).filter(Repositories.domain=='web').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(sqlalchemy.func.strftime('%Y', Refactorings.commitDate)).all()]
-                        r = pd.DataFrame(results, columns=['year', 'count']).to_json(orient='records')
-                    elif countBy=="type":
-                        results = [tuple(row) for row in db.session.query(Refactorings.refactoringName, sqlalchemy.func.count(Refactorings.refactoringName)).filter(Repositories.domain=='web').join(Repositories,Repositories.id==Refactorings.repositoryId).group_by(Refactorings.refactoringName).all()]
-                        r = pd.DataFrame(results, columns=['type', 'count']).to_json(orient='records')
-                else:    
-                    return '{"status":"error","message":"Invalid groupBy or countBy.. Try again."}'
-            
-                db.session.add(Queries(hash=hash,result=r))
-                db.session.commit()
-                return r
-            
     webbrowser.open('http://localhost:8000')
     app.run(debug=False, port=8000)

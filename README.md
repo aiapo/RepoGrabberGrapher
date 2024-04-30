@@ -20,7 +20,7 @@ python main.py --rgds YOUR_RGDS_FILE
 
 Where *YOUR_RGDS_FILE* is the RGDS exported from RepoGrabber for repository and refactoring information.
 
-You also may use HTTP directly, but be aware on large datasets this can be slow/undesired. Planning to locally download the RGDS if this is choosen, but it's not implemented.
+You also may use HTTP directly, and the tool with temporarly download the dataset while it imports in the file. Only on remote imports after import, the file will be deleted.
 
 ### Open
 The webpage should open automatically in your default browser, but it is located at localhost:8000 as well.
@@ -28,5 +28,4 @@ The webpage should open automatically in your default browser, but it is located
 # Todo
 * More statistics
 * Additional filters
-* Download RGDSs locally if they are from a remote source
 * Speedups
