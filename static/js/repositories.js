@@ -1,16 +1,16 @@
 d3.json("/api/repos/countBy/push")
 .then(function(data){
-    makeChart(data.count,"chart1","pie");
+    makeChart(data,"chart1","pie");
 });
 
 d3.json("/api/repos/countBy/creation")
 .then(function(data){
-    makeChart(data.count,"chart2","pie");
+    makeChart(data,"chart2","pie");
 });
 
 d3.json("/api/repos/countBy/update")
 .then(function(data){
-    makeChart(data.count,"chart3","pie");
+    makeChart(data,"chart3","pie");
 });
 
 d3.json("/api/repos/countBy/size/binCount/50")
@@ -30,7 +30,7 @@ d3.json("/api/repos/countBy/committer/binCount/15")
 
 d3.json("/api/repos/countBy/domain")
 .then(function(data){
-    makeChart(data.count,"chart4","pie");
+    makeChart(data,"chart4","pie");
 });
 
 $('#repositoriesTable').DataTable( {

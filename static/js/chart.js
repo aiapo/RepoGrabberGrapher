@@ -22,15 +22,28 @@ function makeChart(data, ch, type) {
     }
 
     for(var i in data){
-        if (!isNaN(Number(data[i])))
-            y.push(Number(data[i]));
-        else
-            y.push(data[i]);
+        let tempX
+        let tempY
 
-        if (!isNaN(Number(i)))
-            x.push(Number(i));
+        if((typeof data[i] === "object")){
+            tempX=Object.values(data[i])[0]
+            tempY=Object.values(data[i])[1]
+        }else{
+            tempX = i
+            tempY = data[i]
+        }
+
+        console.log(tempX + " "+ tempY)
+
+        if (!isNaN(Number(tempY)))
+            y.push(Number(tempY));
         else
-            x.push(i);
+            y.push(tempY);
+
+        if (!isNaN(Number(tempX)))
+            x.push(Number(tempX));
+        else
+            x.push(tempX);
     }
 
     var chart = new Chart(ch, {
