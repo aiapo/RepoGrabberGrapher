@@ -20,7 +20,7 @@ python main.py --rgds YOUR_RGDS_FILE
 
 Where *YOUR_RGDS_FILE* is the RGDS exported from RepoGrabber for repository and refactoring information.
 
-You also may use HTTP directly, and the tool with temporarly download the dataset while it imports in the file. Only on remote imports after import, the file will be deleted.
+You also may use HTTP directly, and the tool will temporarly download the dataset while it imports the file. Only on remote imports after import the file will be automatically deleted.
 
 ### Open
 The webpage should open automatically in your default browser, but it is located at localhost:8000 as well.
