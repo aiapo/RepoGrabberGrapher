@@ -13,10 +13,14 @@ from dataclasses import dataclass
 import validators
 import requests
 from tqdm import tqdm
+from sqlalchemy.dialects.sqlite import insert
 import os
+from zlib_ng import gzip_ng_threaded
+import sqlite3
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///rgg.db'
+DB_NAME = "rgg.db"
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///'+DB_NAME
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -84,11 +88,11 @@ class Languages(db.Model):
 
 @dataclass    
 class Refactorings(db.Model):
-    refactoringHash = db.Column(db.Text, primary_key=True)
+    refactoringHash = db.Column(db.Text, primary_key=True,)
     commit = db.Column(db.Text, primary_key=True)
     gituri = db.Column(db.Text)
     repositoryId = db.Column(db.Text, primary_key=True)
-    refactoringName = db.Column(db.Text)
+    refactoringName = db.Column(db.Text, primary_key=True)
     leftStartLine = db.Column(db.Text)
     leftEndLine = db.Column(db.Text)
     leftStartColumn = db.Column(db.Text)
@@ -119,6 +123,7 @@ def parseBool(inp):
 
 def db_init():
     db.create_all()
+    db.session.execute(sqlalchemy.text('PRAGMA journal_mode = OFF'))
 
 def download(url, fname, chunk_size=1024):
     resp = requests.get(url, stream=True)
@@ -134,7 +139,60 @@ def download(url, fname, chunk_size=1024):
             size = file.write(data)
             bar.update(size)
 
+def sendToDBCore(rows,conn: sqlite3.Connection):
+    if rows:
+        if any(d['relation'] == 'repositories' for d in rows):
+            conn.executemany('INSERT INTO repositories VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING', [
+                (
+                    x['data'][0],x['data'][1],x['data'][2],x['data'][3],x['data'][4],
+                    x['data'][5],x['data'][6],x['data'][7],x['data'][8],parseBool(x['data'][9]),
+                    x['data'][10],parseBool(x['data'][11]),parseBool(x['data'][12]),
+                    parseBool(x['data'][13]),parseBool(x['data'][14]),parseBool(x['data'][15]),
+                    int(x['data'][16]),int(x['data'][17]),int(x['data'][18]),int(x['data'][19]),
+                    int(x['data'][20]),int(x['data'][21]),int(x['data'][22]),int(x['data'][23]),
+                    int(x['data'][24]),x['data'][25],x['data'][26]
+                ) for x in rows if x['relation'] == 'repositories']
+            )
+            
+        if any(d['relation'] == 'languages' for d in rows):
+            conn.executemany('INSERT INTO languages VALUES (?,?,?) ON CONFLICT DO NOTHING', [
+                (
+                    x['data'][0],x['data'][1],int(x['data'][2])
+                ) for x in rows if x['relation'] == 'languages']
+            )
+            
+        if any(d['relation'] == 'refactorings' for d in rows):
+            conn.executemany('INSERT INTO refactorings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING', [
+                (
+                    x['data'][0],x['data'][1],x['data'][2],x['data'][3],x['data'][4],
+                    int(x['data'][5]),int(x['data'][6]),int(x['data'][7]),int(x['data'][8]),
+                    x['data'][9],x['data'][10],x['data'][11],x['data'][12],int(x['data'][13]),
+                    int(x['data'][14]),int(x['data'][15]),int(x['data'][16]),x['data'][17],
+                    x['data'][18],x['data'][19],x['data'][20],x['data'][21],x['data'][22],
+                    x['data'][23]
+                ) for x in rows if x['relation'] == 'refactorings']
+            )
+
+        conn.commit()    
+
+def initApi():
+    types = ["all","mobile","desktop","web"]
+    count = ["year","type"]
+
+    print("Running some pre-analysis...")
+    pbar = tqdm(total=(len(types)*len(count)))
+    for x in types:
+        for y in count:
+            refactoringsBy(x,y)
+            pbar.update(1)
+    pbar.close()       
+
 def readRGDS(fileName,compressed):
+    conn = sqlite3.connect("instance/"+DB_NAME, isolation_level=None)
+
+    conn.execute('PRAGMA journal_mode = OFF;')
+    conn.execute('PRAGMA synchronous = 0;')
+
     validAction = {
         "rgds_version":2,
         "title":2,
@@ -143,31 +201,34 @@ def readRGDS(fileName,compressed):
         "data":1
     }
     if(compressed):
-        with gzip.open(fileName,'rt', encoding="utf8") as f:
+        totalLines = sum (1 for line in gzip_ng_threaded.open(fileName,'rt', encoding="utf8"))
+
+        with gzip_ng_threaded.open(fileName,'rt', encoding="utf8") as f:
             m = hashlib.md5()
             while True:
-                data = f.read(8192).encode('utf-8')
+                data = f.read(16384).encode('utf-8')
                 if not data:
                     break
                 m.update(data)
             hashI = m.hexdigest()
 
             if(Imports.query.filter_by(hash=hashI).all()):
+                initApi()
                 return False
             
-        with gzip.open(fileName,'rt', encoding="utf8") as f:
+        with gzip_ng_threaded.open(fileName,'rt', encoding="utf8") as f:
             currentRelation = ''
             startDataRead = False
             step = 0
+            rows = [] 
 
-            for line in f:
-                if step % 10000 == 0:
-                    db.session.commit()
+            for line in tqdm(f, total=totalLines):
+                if step % 1000000 == 0 or step==totalLines-1:
+                    sendToDBCore(rows,conn)
+                    rows.clear()
 
                 line = line.strip("\n")
-                if(line.startswith('%')):
-                    comment = line
-                else:    
+                if not line.lstrip().startswith('%'):  
                     if(line.startswith('@')):
                         currentActionFull = re.split(r' (?=(?:[^"]*"[^"]*")*[^"]*$)', line[1:].lower())
                         currentAction = currentActionFull[0].lower()
@@ -176,7 +237,6 @@ def readRGDS(fileName,compressed):
                                 startDataRead = False
                                 if(currentAction=='relation'):
                                     currentRelation = currentActionFull[1]
-                                    print('[DEBUG] Switched currentRelation to '+currentActionFull[1])
                                 elif(currentAction=='data'):
                                     startDataRead = True
                             else:
@@ -189,81 +249,18 @@ def readRGDS(fileName,compressed):
                         for i in range(len(currentDataLine)):
                             currentDataLine[i] = re.sub(r'^"|"$','',currentDataLine[i])
 
-                        if(currentRelation=='repositories'):
-                            db.session.add(
-                                Repositories(
-                                    id = currentDataLine[0],
-                                    name = currentDataLine[1],
-                                    owner = currentDataLine[2],
-                                    url = currentDataLine[3],
-                                    description = currentDataLine[4],
-                                    primaryLanguage = currentDataLine[5],
-                                    creationDate = currentDataLine[6],
-                                    updateDate = currentDataLine[7],
-                                    pushDate = currentDataLine[8],
-                                    isArchived = parseBool(currentDataLine[9]),
-                                    archivedAt = currentDataLine[10],
-                                    isForked = parseBool(currentDataLine[11]),
-                                    isEmpty = parseBool(currentDataLine[12]),
-                                    isLocked = parseBool(currentDataLine[13]),
-                                    isDisabled = parseBool(currentDataLine[14]),
-                                    isTemplate = parseBool(currentDataLine[15]),
-                                    totalIssueUsers = int(currentDataLine[16]),
-                                    totalMentionableUsers = int(currentDataLine[17]),
-                                    totalCommitterCount = int(currentDataLine[18]),
-                                    totalProjectSize = int(currentDataLine[19]),
-                                    totalCommits = int(currentDataLine[20]),
-                                    issueCount = int(currentDataLine[21]),
-                                    forkCount = int(currentDataLine[22]),
-                                    starCount = int(currentDataLine[23]),
-                                    watchCount = int(currentDataLine[24]),
-                                    branchName = currentDataLine[25],
-                                    domain = currentDataLine[26]
-                                )
-                            )
-
-                        if(currentRelation=='languages'):
-                            db.session.add(
-                                Languages(
-                                    repoId = currentDataLine[0],
-                                    name = currentDataLine[1],
-                                    size = int(currentDataLine[2])
-                                )
-                            )
-
-                        if(currentRelation=='refactorings'):
-                            db.session.add(
-                                Refactorings(
-                                    refactoringHash = currentDataLine[0],
-                                    commit = currentDataLine[1],
-                                    gituri = currentDataLine[2],
-                                    repositoryId = currentDataLine[3],
-                                    refactoringName = currentDataLine[4],
-                                    leftStartLine = int(currentDataLine[5]),
-                                    leftEndLine = int(currentDataLine[6]),
-                                    leftStartColumn = int(currentDataLine[7]),
-                                    leftEndColumn = int(currentDataLine[8]),
-                                    leftFilePath = currentDataLine[9],
-                                    leftCodeElementType = currentDataLine[10],
-                                    leftDescription = currentDataLine[11],
-                                    leftCodeElement = currentDataLine[12],
-                                    rightStartLine = int(currentDataLine[13]),
-                                    rightEndLine = int(currentDataLine[14]),
-                                    rightStartColumn = int(currentDataLine[15]),
-                                    rightEndColumn = int(currentDataLine[16]),
-                                    rightFilePath = currentDataLine[17],
-                                    rightCodeElementType = currentDataLine[18],
-                                    rightDescription = currentDataLine[19],
-                                    rightCodeElement = currentDataLine[20],
-                                    commitAuthor = currentDataLine[21],
-                                    commitMessage = currentDataLine[22],
-                                    commitDate = currentDataLine[23]
-                                )
-                            )
+                        rows.append({"relation": currentRelation,"data": currentDataLine})            
                 step+=1
+
+            sendToDBCore(rows,conn)
+            rows.clear()
 
             db.session.add(Imports(hash=hashI))
             db.session.commit()
+
+            conn.close()
+
+            initApi()
 
             return True    
     else:
@@ -449,6 +446,7 @@ if __name__ == '__main__':
                 if os.path.exists('ds.rgds'):
                     os.remove('ds.rgds')
             else:
+                print("Local file detected...")
                 importDs(opts.rgds)    
                 
     webbrowser.open('http://localhost:8000')
