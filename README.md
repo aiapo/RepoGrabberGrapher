@@ -22,6 +22,10 @@ Where *YOUR_RGDS_FILE* is the RGDS exported from RepoGrabber for repository and 
 
 You also may use HTTP directly, and the tool will temporarly download the dataset while it imports the file. Only on remote imports after import the file will be automatically deleted.
 
+The remote downloaders are plugin based, and if a source needs more manipulation than directly accessing, new Downloaders can be added in the 'downloaders' directory.
+
+Currently supported Downloaders include: [GitHub, Generic]
+
 ### Open
 The webpage should open automatically in your default browser, but it is located at localhost:8000 as well.
 
