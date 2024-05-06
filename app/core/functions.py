@@ -16,9 +16,27 @@ from app.core.routes.api.refactorings import (
 )
 from app.db.db import db
 
-def parseBool(inp):
+"""
+parseBool:
+
+Simple bool parser because RGDS uses t/f for boolean values
+
+:param inp(str): Input string
+
+:return bool: Boolean based on input
+"""
+def parseBool(inp:str):
     return inp.lower=='t'
 
+"""
+sendToDBCore:
+
+Uses a direct SQLite connection to insert in bulk
+
+:param rows(list[dict{relation,data}]): Takes a list of dictonaries
+ comprising of the relation and the data
+:param conn(sqlite3.Connection): Takes a SQLite3 connection
+"""
 def sendToDBCore(rows,conn: sqlite3.Connection):
     if rows:
         if any(d['relation'] == 'repositories' for d in rows):
@@ -55,6 +73,13 @@ def sendToDBCore(rows,conn: sqlite3.Connection):
 
         conn.commit()    
 
+
+"""
+initApi:
+
+Does preprocessing (on a large dataset, this is needed so that the pages get rendered quickly)
+Specifically for refactorings.
+"""
 def initApi():
     types = ["all","mobile","desktop","web"]
     count = ["year","type"]
@@ -67,7 +92,20 @@ def initApi():
             pbar.update(1)
     pbar.close()       
 
-def readRGDS(fileName,compressed,db_name):
+
+"""
+readRGDS:
+
+Reads in a RGDS file and imports it into the database, line by line
+NOTE: Only compressed RGDS files are supported as of this time.
+
+:param fileName(str): Path of the RGDS file
+:param compressed(bool): If the RGDS file is compressed
+:param db_name(str): Name of the database file (needed for speedy import)
+
+:return bool: If the the import was a success
+"""
+def readRGDS(fileName:str,compressed:bool,db_name:str):
     conn = sqlite3.connect("instance/"+db_name, isolation_level=None)
 
     conn.execute('PRAGMA journal_mode = OFF;')
@@ -147,6 +185,15 @@ def readRGDS(fileName,compressed,db_name):
         print("[ERROR] Only compressed RGDS is supported at this time.")
         return False  
 
+"""
+parseArgs:
+
+Uses argparse to parse arguments and verify only supported commands used
+
+:param argv(list(str)): List of arguments
+
+:return opts: Valid arguments and their data
+"""
 def parseArgs(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument('--rgds', help='Load Repository Dataset from RGDS File', required=True)
@@ -157,7 +204,19 @@ def parseArgs(argv):
     opts = parser.parse_args(argv)
     return opts
 
-def binnedDataCSV(column,binSize):
+
+"""
+binnedDataCSV:
+
+Bin data for use in histograms based on a specific size
+Specifically for Repositories as of now
+
+:param column(str): Specified column to do the binning on
+:param binSize(int): Size of each bin
+
+:return str: JSON formatted bins with counts
+"""
+def binnedDataCSV(column:str,binSize:int):
     hash=hashlib.md5(("binnedDataCSV"+column+str(binSize)).encode()).hexdigest()
     result = db.session.query(Queries.result).filter_by(hash=hash).one_or_none()
     if(result != None):

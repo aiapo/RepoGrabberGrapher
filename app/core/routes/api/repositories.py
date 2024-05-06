@@ -11,8 +11,16 @@ from app.core.functions import (
     binnedDataCSV
 )
 
+"""
+Create repositories API blueprint
+"""
 repositories_route = Blueprint('repositories', __name__, template_folder='templates', url_prefix='/repos')
 
+"""
+List Repositories:
+
+List all the repositories in JSON
+"""
 @repositories_route.route('list')
 def reposList():
     hash=hashlib.md5(("reposList").encode()).hexdigest()
@@ -30,6 +38,15 @@ def reposList():
         db.session.commit()
         return r
 
+"""
+Repositories Counted By:
+
+Lists the count of repos by a certain metric in JSON
+Save the result in the database too
+
+:param countBy(str): Metric to count by
+    Valid: [creation,push,update,domain]
+"""
 @repositories_route.route('countBy/<string:countBy>')
 def reposBy(countBy):
     hash=hashlib.md5(("reposBy"+countBy).encode()).hexdigest()
@@ -56,6 +73,16 @@ def reposBy(countBy):
         db.session.commit()
         return r
 
+"""
+Repositories Binned By:
+
+Bins the count of repos by a certain metric in JSON
+Save the result in the database too
+
+:param countBy(str): Metric to count by
+    Valid: [commit,committer,size,issue]
+:param binCount(int): How many bins
+"""
 @repositories_route.route('countBy/<string:countBy>/binCount/<int:binCount>')
 def reposBinned(countBy,binCount):
     if countBy=="commit":

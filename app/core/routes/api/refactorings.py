@@ -9,8 +9,22 @@ from app.db.models import (
 )
 from app.db.db import db
 
+"""
+Create refactorings API blueprint
+"""
 refactorings_route = Blueprint('refactorings', __name__, template_folder='templates', url_prefix='/refactorings')
 
+"""
+Refactorings By:
+
+Lists the count of refactorings by a certain metric by the domain in JSON
+Save the result in the database too
+
+:param groupBy(str): Domain to group by
+    Valid: [all,desktop,mobile,web]
+:param countBy(str): Metric to group by
+    Valid: [year,type]
+"""
 @refactorings_route.route('/groupBy/<string:groupBy>/countBy/<string:countBy>')
 def refactoringsBy(groupBy,countBy):
     hash=hashlib.md5(("refactoringsBy"+groupBy+countBy).encode()).hexdigest()

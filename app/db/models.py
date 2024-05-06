@@ -1,12 +1,24 @@
 from app.db.db import db
 
+"""
+Imports:
+
+:param id(int): Just an auto_increment id, not needed to specify
+:param hash(text): MD5 hash of the RGDS file
+"""
 class Imports(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     hash = db.Column(db.Text, nullable=False)
 
     def __repr__(self):
         return f'<Import {self.hash}>'
-    
+
+"""
+Queries:
+
+:param hash(text): MD5 hash of the request
+:param result(text): The actual result in JSON
+"""
 class Queries(db.Model):
     hash = db.Column(db.Text, primary_key=True)
     result = db.Column(db.Text, nullable=False)
@@ -14,6 +26,10 @@ class Queries(db.Model):
     def __repr__(self):
         return f'{self.result}'
     
+"""
+Repositories:
+
+"""
 class Repositories(db.Model):
     id = db.Column(db.Text, primary_key=True)
     name = db.Column(db.Text, nullable=False)
@@ -49,6 +65,10 @@ class Repositories(db.Model):
     def as_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
   
+"""
+Languages:
+
+"""
 class Languages(db.Model):
     repoId = db.Column(db.Text, primary_key=True)
     name = db.Column(db.Text, primary_key=True)
@@ -60,6 +80,10 @@ class Languages(db.Model):
     def as_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
+"""
+Refactorings:
+
+"""
 class Refactorings(db.Model):
     refactoringHash = db.Column(db.Text, primary_key=True,)
     commit = db.Column(db.Text, primary_key=True)
