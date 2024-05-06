@@ -8,7 +8,6 @@ from app.core.downloader import (
     Downloader
 )
 from urllib.parse import urlparse
-import os
 from app.db.models import db
 from app.core.functions import (
     parseArgs,
