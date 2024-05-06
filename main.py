@@ -17,6 +17,14 @@ from sqlalchemy.dialects.sqlite import insert
 import os
 from zlib_ng import gzip_ng_threaded
 import sqlite3
+from app.core.downloader import (
+    Downloader
+)
+from urllib.parse import urlparse
+import os
+import traceback
+from importlib import util
+
 
 app = Flask(__name__)
 DB_NAME = "rgg.db"
@@ -124,20 +132,6 @@ def parseBool(inp):
 def db_init():
     db.create_all()
     db.session.execute(sqlalchemy.text('PRAGMA journal_mode = OFF'))
-
-def download(url, fname, chunk_size=1024):
-    resp = requests.get(url, stream=True)
-    total = int(resp.headers.get('content-length', 0))
-    with open(fname, 'wb') as file, tqdm(
-        desc=fname,
-        total=total,
-        unit='iB',
-        unit_scale=True,
-        unit_divisor=1024,
-    ) as bar:
-        for data in resp.iter_content(chunk_size=chunk_size):
-            size = file.write(data)
-            bar.update(size)
 
 def sendToDBCore(rows,conn: sqlite3.Connection):
     if rows:
@@ -265,7 +259,7 @@ def readRGDS(fileName,compressed):
             return True    
     else:
         print("[ERROR] Only compressed RGDS is supported at this time.")
-        return False        
+        return False  
 
 def parseArgs(argv):
     parser = argparse.ArgumentParser()
@@ -432,19 +426,44 @@ if __name__ == '__main__':
         opts = parseArgs(sys.argv[1:])
 
         if opts.rgds:
+            url = opts.rgds
             def importDs(ds):
                 if(readRGDS(ds,True)):
                     print("Dataset successfully imported into database from RGDS file!")
                 else:
                     print("Dataset ignored because RGDS file has already been imported. Using database...") 
 
-            if(validators.url(opts.rgds)):
+            if(validators.url(url)):
                 print("Remote file detected, downloading...")
-                download(opts.rgds,'ds.rgds')
-                importDs('ds.rgds')
-                print("Deleting temporary download...")
-                if os.path.exists('ds.rgds'):
-                    os.remove('ds.rgds')
+                domain = urlparse(url).netloc
+                dl = None
+                foundDl = False
+                genericDl = None
+                for d in Downloader.plugins:
+                    dl = d()
+                    if(dl.NAME=='Generic'):
+                        genericDl = dl
+                    if domain in dl.BASEDOMAINS:
+                        foundDl = True
+                        break
+
+                if(dl != None and genericDl != None):
+                    if (not foundDl):
+                        print(domain+" doesn't have it's own Downloader, using Generic...")
+                        dl = genericDl
+                    else:
+                        print("Found a downloader for "+domain+"...")    
+
+                    path = os.path.dirname(os.path.abspath(__file__))+"/ds.rgds"
+                    dUrl = dl.getDownloadUrl(url)
+                    dl.download(dUrl,path)             
+                    importDs(path)
+                    print("Deleting temporary download...")
+                    if os.path.exists(path):
+                        os.remove(path)
+                else:
+                    print("No downloaders found, not even the generic. Check your files.")
+                    exit(1)          
             else:
                 print("Local file detected...")
                 importDs(opts.rgds)    
