@@ -29,15 +29,36 @@ class Downloader(metaclass=ABCMeta):
     # will be used instead. 
        
     def checkExists(self, url:str) -> bool:
+        """
+        Checks if the URL provided is valid
+
+        :param url(str): The url provided
+
+        :return bool: True exists, False doesn't
+        """
         return requests.head(url, allow_redirects=True).status_code == 200
     
     def checkDir(self, url:str) -> bool:
+        """
+        Checks if the URL provided is a direct RGDS file or a directory
+
+        :param url(str): The url provided
+
+        :return bool: True if directory, False if is RGDS
+        """
         response = requests.head(url, allow_redirects=True)
         contentType = response.headers['content-type']
 
         return contentType!='application/octet-stream'
 
     def readYaml(self, url:str) -> list:
+        """
+        Reads the YAML file to determine which datasets should be imported.
+
+        :param url(str): The url to the YAML file
+
+        :return list(dict): List of datasets to download and import
+        """
         toImportDatasets = []
         resp = requests.get(url, allow_redirects=True)
         if resp.ok:
@@ -80,7 +101,11 @@ class Downloader(metaclass=ABCMeta):
     @abstractmethod
     def getYamlUrl(self, url:str) -> str:
         """
-        Gets a YAML file
+        Gets a YAML file's URL
+
+        :param url(str): The url as provided by the user 
+
+        :return str: The YAML url
         """
 
     @abstractmethod
