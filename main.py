@@ -113,12 +113,23 @@ if __name__ == '__main__':
                     Download using the Downloader and import, then delete when done
                     """
                     path = os.path.dirname(os.path.abspath(__file__))+"/ds.rgds"
-                    dUrl = dl.getDownloadUrl(url)
-                    dl.download(dUrl,path)             
-                    importDs(path)
-                    print("Deleting temporary download...")
-                    if os.path.exists(path):
-                        os.remove(path)
+                    datasets = []
+                    if(dl.checkExists(url)):
+                        if(dl.checkDir(url)):
+                            yamlFile = dl.getYamlUrl(url)
+                            print(yamlFile)
+                            datasets = dl.readYaml(yamlFile)
+                            print(datasets)
+                        else:
+                            datasets.append({
+                                "location": ""
+                            })    
+                        for dataset in datasets:
+                            dl.download(dl.getDownloadUrl(url,dataset['location']),path)             
+                            importDs(path)
+                            print("Deleting temporary download...")
+                            if os.path.exists(path):
+                                os.remove(path)
                 else:
                     print("No downloaders found, not even the generic. Check your files.")
                     exit(1)          

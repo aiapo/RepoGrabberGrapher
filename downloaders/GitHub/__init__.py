@@ -7,9 +7,18 @@ class GitHub(Downloader):
     NAME = 'GitHub'
     BASEDOMAINS = ('github.com','www.github.com')
 
-    def getDownloadUrl(self,url):
-        repo = re.sub('/blob', '', urlparse(url).path)
-        if repo.endswith(".rgds"):
-            return "https://raw.githubusercontent.com"+repo
-        else:
-            return ""
+    def getYamlUrl(self, url):
+        return getGitHubRaw(url)+"/dataset.yaml"
+        
+    def getDownloadUrl(self,url,dataset):
+        return getGitHubRaw(url)+dataset
+        
+def getGitHubRaw(url):
+    path = urlparse(url).path
+    print(path.split('/'))
+    if(len(path.split('/'))==3):
+        return "https://raw.githubusercontent.com"+path+"/main/"
+    elif(len(path.split('/'))==4):
+        return "https://raw.githubusercontent.com"+path
+    else:
+        return None

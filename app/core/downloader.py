@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 import os
 import traceback
 from importlib import util
+import yaml
 
 class Downloader(metaclass=ABCMeta):
     ## Abstract Fields ##
@@ -25,7 +26,27 @@ class Downloader(metaclass=ABCMeta):
     ## Optional Abstract ##
     # These methods can be reimplemented by the downloader,
     # however that isn't needed as otherwise the methods below
-    # will be used instead.    
+    # will be used instead. 
+       
+    def checkExists(self, url:str) -> bool:
+        return requests.head(url, allow_redirects=True).status_code == 200
+    
+    def checkDir(self, url:str) -> bool:
+        response = requests.head(url, allow_redirects=True)
+        contentType = response.headers['content-type']
+
+        return contentType!='application/octet-stream'
+
+    def readYaml(self, url:str) -> list:
+        toImportDatasets = []
+        resp = requests.get(url, allow_redirects=True)
+        if resp.ok:
+            c = yaml.safe_load(resp.content.decode("utf-8"))
+            print("Got dataset info from YAML for '"+c['title']+"'.")
+            for dataset in c['datasets']:
+                if dataset['import']==True:
+                    toImportDatasets.append(dataset)
+        return toImportDatasets
 
     def download(self, url:str, fname:str, chunk_size:int=1024) -> bool:
         """
@@ -51,18 +72,25 @@ class Downloader(metaclass=ABCMeta):
                     size = file.write(data)
                     bar.update(size)
             return True
-        return False        
-
+        return False
+    
     ## Required Abstract ##
     # These methods must be implemented by the downloader
 
     @abstractmethod
-    def getDownloadUrl(self, url: str) -> str:
+    def getYamlUrl(self, url:str) -> str:
+        """
+        Gets a YAML file
+        """
+
+    @abstractmethod
+    def getDownloadUrl(self, url: str, dataset: str) -> str:
         """
         Gets a file (and does whatever processing is needed to get the download URL,
         you may decide to use your own methods if needed.)
 
         :param url(str): The url as provided by the user 
+        :param dataset(str): The dataset path in relation to top level
 
         :return str: The direct downloadable url
         """
