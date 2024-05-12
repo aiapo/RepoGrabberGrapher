@@ -24,7 +24,9 @@ You also may use HTTP directly, and the tool will temporarly download the datase
 
 The remote downloaders are plugin based, and if a source needs more manipulation than directly accessing, new Downloaders can be added in the 'downloaders' directory.
 
-Currently supported Downloaders include: [GitHub, Generic]
+DOI records are traversed to their current URL, and then are handled by their destination Downloader.
+
+Currently supported Downloaders include: [GitHub, Zenodo, Generic]
 
 ### Open
 The webpage should open automatically in your default browser, but it is located at localhost:8000 as well.
