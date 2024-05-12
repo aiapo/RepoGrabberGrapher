@@ -1,6 +1,5 @@
 from app.core.downloader import Downloader
 from urllib.parse import urlparse
-import re
 
 # This is a GitHub downloader
 class GitHub(Downloader):
