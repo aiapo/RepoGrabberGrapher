@@ -14,6 +14,7 @@ from app.core.functions import (
     readRGDS
 )
 from app.core.routes.api.main import api
+import requests
 
 """
 Register the Flask app and import the routes (the API route has it's own blueprint)
@@ -75,6 +76,14 @@ if __name__ == '__main__':
                 domain = urlparse(url).netloc
 
                 """
+                Unfurl DOI records to get the current URL
+                """
+                if domain == 'doi.org':
+                    r = requests.head(url, allow_redirects=True)
+                    url = r.url
+                    domain = urlparse(url).netloc
+
+                """
                 Go through all the Downloaders installed and if it supports the remote URL
                 then use it, otherwise if no Downloader supports it, just use the Generic.
 
@@ -117,13 +126,12 @@ if __name__ == '__main__':
                     if(dl.checkExists(url)):
                         if(dl.checkDir(url)):
                             yamlFile = dl.getYamlUrl(url)
-                            print(yamlFile)
                             datasets = dl.readYaml(yamlFile)
-                            print(datasets)
                         else:
                             datasets.append({
                                 "location": ""
                             })    
+                        print(datasets)
                         for dataset in datasets:
                             dl.download(dl.getDownloadUrl(url,dataset['location']),path)             
                             importDs(path)
