@@ -116,7 +116,7 @@ if __name__ == '__main__':
                         print(domain+" doesn't have it's own Downloader, using Generic...")
                         dl = genericDl
                     else:
-                        print("Found a downloader for "+domain+"...") 
+                        print("Found a downloader for "+domain+" with "+dl.NAME+" Downloader...") 
 
                     """
                     Download using the Downloader and import, then delete when done
