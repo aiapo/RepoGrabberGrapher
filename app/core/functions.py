@@ -131,7 +131,6 @@ def readRGDS(fileName:str,compressed:bool,db_name:str):
             hashI = m.hexdigest()
 
             if(db.session.query(Imports).filter_by(hash=hashI).one_or_none() != None):
-                initApi()
                 return False
             
         with gzip_ng_threaded.open(fileName,'rt', encoding="utf8") as f:
@@ -175,6 +174,8 @@ def readRGDS(fileName:str,compressed:bool,db_name:str):
 
             db.session.add(Imports(hash=hashI))
             db.session.commit()
+
+            conn.execute('DELETE FROM Queries;')
 
             conn.close()
 
