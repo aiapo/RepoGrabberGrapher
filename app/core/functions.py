@@ -106,11 +106,14 @@ NOTE: Only compressed RGDS files are supported as of this time.
 :return bool: If the the import was a success
 """
 def readRGDS(fileName:str,compressed:bool,db_name:str):
+    # create a direct sqlite connection for speed
     conn = sqlite3.connect("instance/"+db_name, isolation_level=None)
 
+    # some sqlite speedups
     conn.execute('PRAGMA journal_mode = OFF;')
     conn.execute('PRAGMA synchronous = 0;')
 
+    # list the valid actions and their number of params
     validAction = {
         "rgds_version":2,
         "title":2,
@@ -119,66 +122,94 @@ def readRGDS(fileName:str,compressed:bool,db_name:str):
         "data":1
     }
     if(compressed):
+        # count total lines (for progress bar)
         totalLines = sum (1 for line in gzip_ng_threaded.open(fileName,'rt', encoding="utf8"))
 
+        # open the downloaded file using gzip_ng_threaded (multithreaded gzip reader)
         with gzip_ng_threaded.open(fileName,'rt', encoding="utf8") as f:
+            # calculate file hash
             m = hashlib.md5()
             while True:
+                # read in 16384 bytes at a time
                 data = f.read(16384).encode('utf-8')
                 if not data:
                     break
                 m.update(data)
+            # get the hash    
             hashI = m.hexdigest()
 
+            # query the imports table to see if the file has already been imported, don't import again
             if(db.session.query(Imports).filter_by(hash=hashI).one_or_none() != None):
                 return False
-            
+
+        # again open and uncompress    
         with gzip_ng_threaded.open(fileName,'rt', encoding="utf8") as f:
             currentRelation = ''
             startDataRead = False
             step = 0
             rows = [] 
 
+            # go line by line (use tqdm to show progress)
             for line in tqdm(f, total=totalLines):
+                # every 1m or last row send rows to db
                 if step % 1000000 == 0 or step==totalLines-1:
                     sendToDBCore(rows,conn)
                     rows.clear()
 
+                # python's picky and we don't care about the new line symbol at the end
                 line = line.strip("\n")
+                # only look at non-comments
                 if not line.lstrip().startswith('%'):  
+                    # if the line is an action
                     if(line.startswith('@')):
+                        # split the line by spaces (in lowercase and without the @)
                         currentActionFull = re.split(r' (?=(?:[^"]*"[^"]*")*[^"]*$)', line[1:].lower())
+                        # our current action is always the first
                         currentAction = currentActionFull[0].lower()
+                        # check the valid actions against the current action
                         if(validAction.get(currentAction) != None):
+                            # check the action parameter validator
                             if(validAction.get(currentAction)==len(currentActionFull)):
+                                # clear data read on new action
                                 startDataRead = False
+                                # if the action is a relation, we set the relation
                                 if(currentAction=='relation'):
                                     currentRelation = currentActionFull[1]
+                                # else if it's data, enable data read    
                                 elif(currentAction=='data'):
                                     startDataRead = True
                             else:
                                 print('[ERROR] Invalid number of parameters for @Action '+currentAction+' in RGDS file... ignoring')
                         else:
                             print('[ERROR] Invalid @Action '+currentAction+' in RGDS file... ignoring')
+                    # if are in data reading and the line isn't empty
                     elif(startDataRead and line!=''):
+                        # split the data line by commas
                         currentDataLine = re.split('","',line)
-
+                        # for every attribute in the data line
                         for i in range(len(currentDataLine)):
+                            # remove the starting and trailing double quotes 
                             currentDataLine[i] = re.sub(r'^"|"$','',currentDataLine[i])
-
-                        rows.append({"relation": currentRelation,"data": currentDataLine})            
+                        # add to list of rows to be added to the specified relation
+                        rows.append({"relation": currentRelation,"data": currentDataLine})
+                # increment the step count                    
                 step+=1
-
+            
+            # final send to the db, and clear the temp rows
             sendToDBCore(rows,conn)
             rows.clear()
 
+            # add the file hash to the imported table
             db.session.add(Imports(hash=hashI))
             db.session.commit()
 
+            # clear all saved queries
             conn.execute('DELETE FROM Queries;')
 
+            # close direct db connection
             conn.close()
 
+            # pre analyze some data
             initApi()
 
             return True    
