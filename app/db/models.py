@@ -6,12 +6,15 @@ Imports:
 :param id(int): Just an auto_increment id, not needed to specify
 :param hash(text): MD5 hash of the RGDS file
 """
+
+
 class Imports(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     hash = db.Column(db.Text, nullable=False)
 
     def __repr__(self):
-        return f'<Import {self.hash}>'
+        return f"<Import {self.hash}>"
+
 
 """
 Queries:
@@ -19,17 +22,22 @@ Queries:
 :param hash(text): MD5 hash of the request
 :param result(text): The actual result in JSON
 """
+
+
 class Queries(db.Model):
     hash = db.Column(db.Text, primary_key=True)
     result = db.Column(db.Text, nullable=False)
 
     def __repr__(self):
-        return f'{self.result}'
-    
+        return f"{self.result}"
+
+
 """
 Repositories:
 
 """
+
+
 class Repositories(db.Model):
     id = db.Column(db.Text, primary_key=True)
     name = db.Column(db.Text, nullable=False)
@@ -60,32 +68,41 @@ class Repositories(db.Model):
     domain = db.Column(db.Text, nullable=True)
 
     def __repr__(self):
-        return f'<Repository {self.name}>'
-    
+        return f"<Repository {self.name}>"
+
     def as_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
-  
+
+
 """
 Languages:
 
 """
+
+
 class Languages(db.Model):
     repoId = db.Column(db.Text, primary_key=True)
     name = db.Column(db.Text, primary_key=True)
     size = db.Column(db.Integer, nullable=False)
 
     def __repr__(self):
-        return f'<Language {self.repoId}:{self.name}>'
-    
+        return f"<Language {self.repoId}:{self.name}>"
+
     def as_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 
 """
 Refactorings:
 
 """
+
+
 class Refactorings(db.Model):
-    refactoringHash = db.Column(db.Text, primary_key=True,)
+    refactoringHash = db.Column(
+        db.Text,
+        primary_key=True,
+    )
     commit = db.Column(db.Text, primary_key=True)
     gituri = db.Column(db.Text)
     repositoryId = db.Column(db.Text, primary_key=True)
@@ -111,6 +128,7 @@ class Refactorings(db.Model):
     commitDate = db.Column(db.Text)
 
     def __repr__(self):
-        return f'<Refactoring {self.refactoringHash}>'
+        return f"<Refactoring {self.refactoringHash}>"
+
     def as_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}

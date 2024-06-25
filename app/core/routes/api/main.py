@@ -5,7 +5,7 @@ from app.core.routes.api.refactorings import refactorings_route
 """
 Create API blueprint
 """
-api = Blueprint('api', __name__, template_folder='templates', url_prefix='/api')
+api = Blueprint("api", __name__, template_folder="templates", url_prefix="/api")
 
 """
 Register repositories and refactorings blueprints to the API
